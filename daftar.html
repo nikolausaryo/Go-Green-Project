@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daftar Nasabah — Bank Sampah Go-Green</title>
+  <link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+  <script src="assets/js/store.js"></script>
+  <script>GG.renderTopbar('', 'public');</script>
+
+  <section class="section">
+    <div class="container" style="max-width:760px">
+      <div class="section-head">
+        <span class="eyebrow">Pendaftaran</span>
+        <h2>Jadi nasabah Go-Green</h2>
+        <p>Isi data di bawah. Setelah submit, akun, ID, dan QR Code-mu langsung aktif.</p>
+      </div>
+
+      <!-- progress mengikuti flowchart Masyarakat Umum -->
+      <div class="stepper">
+        <div class="s active"><b>1. Isi Form</b>Data diri</div>
+        <div class="s"><b>2. Submit</b>Kirim data</div>
+        <div class="s"><b>3. Akun Dibuat</b>Masuk dashboard</div>
+      </div>
+
+      <div class="card" id="form-card">
+        <form id="form-daftar">
+          <div class="grid grid-2">
+            <div class="field">
+              <label for="nama">Nama lengkap</label>
+              <input class="input" id="nama" name="nama" required placeholder="cth. Sri Wahyuni">
+            </div>
+            <div class="field">
+              <label for="email">Email</label>
+              <input class="input" id="email" name="email" type="email" required placeholder="nama@email.com">
+            </div>
+          </div>
+          <div class="field">
+            <label for="alamat">Alamat</label>
+            <textarea class="input" id="alamat" name="alamat" required placeholder="Dusun, RT/RW, Kelurahan, Kecamatan"></textarea>
+          </div>
+          <div class="grid grid-2">
+            <div class="field">
+              <label for="pin">Buat PIN (4 digit)</label>
+              <input class="input" id="pin" name="pin" inputmode="numeric" maxlength="4" pattern="\d{4}" required placeholder="cth. 1234">
+              <div class="hint">Dipakai untuk masuk ke akunmu nanti.</div>
+            </div>
+            <div class="field">
+              <label>Jenis keanggotaan</label>
+              <label class="check mt-1"><input type="checkbox" id="member" checked> Member penyetor sampah</label>
+              <label class="check"><input type="checkbox" id="donatur"> Donatur</label>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-block mt-2" type="submit">Buat Akun</button>
+        </form>
+      </div>
+
+      <!-- kartu sukses (disembunyikan dulu) -->
+      <div class="card hidden" id="success-card">
+        <div class="center">
+          <div class="badge green" style="font-size:.9rem">✓ Akun berhasil dibuat</div>
+          <h2 class="mt-2" id="halo">Selamat datang!</h2>
+          <p class="muted">Simpan ID & PIN ini untuk masuk. QR Code-mu dipakai saat menyetor sampah ke karyawan.</p>
+        </div>
+        <div class="grid grid-2 mt-2" style="align-items:center">
+          <div>
+            <div class="field"><label>ID Nasabah</label><div class="input" id="out-id" style="font-weight:700"></div></div>
+            <div class="field"><label>PIN</label><div class="input" id="out-pin" style="font-weight:700"></div></div>
+            <div class="field"><label>Nama</label><div class="input" id="out-nama"></div></div>
+          </div>
+          <div class="center">
+            <div class="qr-box" id="out-qr"></div>
+            <div class="qr-cap">QR Code Nasabah</div>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-block mt-2" id="go-dash">Masuk ke Dashboard</button>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    GG.renderFooter();
+    GG.renderChatbot();
+
+    const form = document.getElementById('form-daftar');
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      const pin = document.getElementById('pin').value;
+      if (!/^\d{4}$/.test(pin)) { GG.toast('PIN harus 4 angka.'); return; }
+
+      const nasabah = GG.addNasabah({
+        nama: document.getElementById('nama').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        alamat: document.getElementById('alamat').value.trim(),
+        pin: pin,
+      });
+
+      // tampilkan kartu sukses
+      document.getElementById('form-card').classList.add('hidden');
+      document.querySelector('.stepper').innerHTML =
+        '<div class="s done"><b>1. Isi Form</b>Selesai</div>' +
+        '<div class="s done"><b>2. Submit</b>Terkirim</div>' +
+        '<div class="s active"><b>3. Akun Dibuat</b>Siap dipakai</div>';
+      const sc = document.getElementById('success-card');
+      sc.classList.remove('hidden');
+      document.getElementById('halo').textContent = 'Halo, ' + nasabah.nama.split(' ')[0] + '!';
+      document.getElementById('out-id').textContent = nasabah.id;
+      document.getElementById('out-pin').textContent = nasabah.pin;
+      document.getElementById('out-nama').textContent = nasabah.nama;
+      document.getElementById('out-qr').innerHTML = GG.qrSVG(nasabah.id, 160);
+      sc.scrollIntoView({ behavior: 'smooth' });
+
+      document.getElementById('go-dash').onclick = function () {
+        GG.login('nasabah', nasabah.id, nasabah.pin); // langsung buat sesi
+        location.href = 'nasabah.html';
+      };
+    });
+  </script>
+</body>
+</html>
