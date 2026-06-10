@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Masuk — Bank Sampah Go-Green</title>
+  <link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+  <script src="assets/js/store.js"></script>
+  <script>GG.renderTopbar('', 'public');</script>
+
+  <section class="section">
+    <div class="container" style="max-width:460px">
+      <div class="section-head">
+        <span class="eyebrow">Masuk</span>
+        <h2>Selamat datang kembali</h2>
+        <p>Pilih jenis akun, lalu masukkan ID dan PIN-mu.</p>
+      </div>
+
+      <div class="card">
+        <div class="tabs">
+          <button id="tab-nasabah" class="active" onclick="setRole('nasabah')">Nasabah</button>
+          <button id="tab-karyawan" onclick="setRole('karyawan')">Karyawan</button>
+        </div>
+
+        <form id="login-form">
+          <div class="field">
+            <label for="id" id="lbl-id">ID Nasabah</label>
+            <input class="input" id="id" required placeholder="NSB-0001">
+          </div>
+          <div class="field">
+            <label for="pin">PIN</label>
+            <input class="input" id="pin" type="password" required placeholder="••••">
+          </div>
+          <div id="face" class="hidden">
+            <button type="button" class="btn btn-ghost btn-block" onclick="faceId()">📷 Scan FaceID (simulasi)</button>
+            <div class="hint center mt-1">Karyawan boleh masuk pakai FaceID atau kredensial.</div>
+          </div>
+          <button class="btn btn-primary btn-block mt-2" type="submit">Masuk</button>
+        </form>
+
+        <div class="card mt-3" style="background:var(--leaf-50);box-shadow:none">
+          <b style="font-size:.85rem">Akun demo</b>
+          <div class="row-item" style="padding:.5rem 0"><div class="grow"><b>Nasabah</b><div class="muted" style="font-size:.84rem">ID NSB-0001 · PIN 1234</div></div>
+            <button class="btn btn-ghost btn-sm" onclick="isi('nasabah','NSB-0001','1234')">Pakai</button></div>
+          <div class="row-item" style="padding:.5rem 0"><div class="grow"><b>Karyawan</b><div class="muted" style="font-size:.84rem">ID KRY-0001 · PIN admin</div></div>
+            <button class="btn btn-ghost btn-sm" onclick="isi('karyawan','KRY-0001','admin')">Pakai</button></div>
+        </div>
+      </div>
+
+      <p class="center muted mt-3" style="font-size:.9rem">Belum punya akun? <a href="daftar.html">Daftar jadi nasabah</a></p>
+    </div>
+  </section>
+
+  <script>
+    let role = 'nasabah';
+    function setRole(r) {
+      role = r;
+      document.getElementById('tab-nasabah').classList.toggle('active', r === 'nasabah');
+      document.getElementById('tab-karyawan').classList.toggle('active', r === 'karyawan');
+      document.getElementById('lbl-id').textContent = r === 'karyawan' ? 'ID Karyawan' : 'ID Nasabah';
+      document.getElementById('id').placeholder = r === 'karyawan' ? 'KRY-0001' : 'NSB-0001';
+      document.getElementById('face').classList.toggle('hidden', r !== 'karyawan');
+    }
+    function isi(r, id, pin) {
+      setRole(r);
+      document.getElementById('id').value = id;
+      document.getElementById('pin').value = pin;
+    }
+    function faceId() {
+      // simulasi: pakai karyawan demo pertama
+      const k = GG.load().karyawan[0];
+      document.getElementById('id').value = k.id;
+      document.getElementById('pin').value = k.pin;
+      GG.toast('FaceID dikenali: ' + k.nama, 'amber');
+    }
+    function go(r) { location.href = r === 'karyawan' ? 'karyawan.html' : 'nasabah.html'; }
+
+    document.getElementById('login-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const res = GG.login(role, document.getElementById('id').value, document.getElementById('pin').value);
+      if (!res.ok) { GG.toast(res.msg); return; }
+      GG.toast('Berhasil masuk. Halo, ' + res.user.nama + '!');
+      setTimeout(() => go(role), 500);
+    });
+  </script>
+</body>
+</html>

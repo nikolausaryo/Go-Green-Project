@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Nasabah — Go-Green</title>
+  <link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+  <script src="assets/js/store.js"></script>
+  <script>
+    const me = GG.requireRole('nasabah');   // kunci halaman utk nasabah
+    GG.renderTopbar('dashboard', 'nasabah');
+  </script>
+
+  <section class="section">
+    <div class="container">
+
+      <!-- Header dashboard: saldo real-time + QR -->
+      <div class="grid grid-2" style="gap:1.4rem;align-items:stretch">
+        <div class="saldo-card">
+          <div class="lbl">Saldo tabungan · <span id="me-id"></span></div>
+          <div class="amt" id="me-saldo">Rp 0</div>
+          <div style="opacity:.85;font-size:.9rem" id="me-nama"></div>
+          <span class="badge" style="background:rgba(255,255,255,.18);color:#fff;margin-top:.8rem">
+            <span class="dot on"></span> Saldo diperbarui real-time
+          </span>
+        </div>
+        <div class="card center">
+          <div class="qr-box" id="me-qr"></div>
+          <div class="qr-cap">QR Code-mu untuk menyetor</div>
+        </div>
+      </div>
+
+      <!-- Pilih Menu -->
+      <h2 class="mt-4" style="font-size:1.5rem">Pilih menu</h2>
+      <div class="grid grid-3 mt-2">
+        <div class="card menu-card" onclick="openMenu('saldo')">
+          <div class="ic">📊</div><h3>Cek Saldo & Riwayat</h3>
+          <p class="muted">Lihat saldo terkini dan seluruh riwayat transaksimu.</p>
+        </div>
+        <div class="card menu-card" onclick="openMenu('katalog')">
+          <div class="ic">🏷️</div><h3>Katalog Harga</h3>
+          <p class="muted">Daftar harga sampah terbaru per kilogram.</p>
+        </div>
+        <div class="card menu-card" onclick="openMenu('setor')">
+          <div class="ic">♻️</div><h3>Presensi & Setor</h3>
+          <p class="muted">Tunjukkan QR ke karyawan atau lapor drop-off mandiri.</p>
+        </div>
+      </div>
+
+      <!-- ============ MENU 1: SALDO & RIWAYAT ============ -->
+      <div class="card mt-4 hidden" id="panel-saldo">
+        <h2 style="font-size:1.4rem">Saldo & riwayat</h2>
+        <div class="saldo-card mt-2" style="max-width:360px">
+          <div class="lbl">Saldo real-time</div>
+          <div class="amt" id="saldo-amt">Rp 0</div>
+        </div>
+        <h3 class="mt-3">Riwayat transaksi</h3>
+        <div id="riwayat"></div>
+      </div>
+
+      <!-- ============ MENU 2: KATALOG ============ -->
+      <div class="card mt-4 hidden" id="panel-katalog">
+        <h2 style="font-size:1.4rem">Daftar harga sampah terbaru</h2>
+        <div class="table-wrap mt-2">
+          <table class="gg">
+            <thead><tr><th>Jenis</th><th>Kategori</th><th class="price">Min/kg</th><th class="price">Maks/kg</th></tr></thead>
+            <tbody id="katalog-body"></tbody>
+          </table>
+        </div>
+        <a href="katalog-harga.html" class="btn btn-ghost mt-3">Buka katalog lengkap</a>
+      </div>
+
+      <!-- ============ MENU 3: PRESENSI & SETOR ============ -->
+      <div class="card mt-4 hidden" id="panel-setor">
+        <h2 style="font-size:1.4rem">Presensi & setor</h2>
+
+        <!-- Tampil QR -->
+        <div class="grid grid-2 mt-2" style="align-items:center">
+          <div class="center">
+            <div class="qr-box" id="setor-qr"></div>
+            <div class="qr-cap">Tunjukkan QR ini ke karyawan</div>
+          </div>
+          <div>
+            <h3>Karyawan ada di tempat?</h3>
+            <p class="muted">Pilih cara setor yang sesuai kondisi di lokasi.</p>
+            <button class="btn btn-primary btn-block mt-1" onclick="setorMode('qr')">Ya — tunjukkan QR ke karyawan</button>
+            <button class="btn btn-amber btn-block mt-2" onclick="setorMode('drop')">Tidak — lapor drop-off mandiri</button>
+          </div>
+        </div>
+
+        <!-- Cabang YA -->
+        <div class="card mt-3 hidden" id="branch-qr" style="background:var(--leaf-50);box-shadow:none">
+          <div class="stepper">
+            <div class="s done"><b>QR</b>Ditampilkan</div>
+            <div class="s active"><b>Penimbangan</b>Oleh karyawan</div>
+            <div class="s"><b>Notifikasi</b>Saldo masuk</div>
+          </div>
+          <p>Tunjukkan QR di atas ke karyawan. Setelah sampah ditimbang, saldo akan masuk otomatis dan
+            kamu menerima notifikasi di sini. <b>Halaman ini memantau saldomu secara real-time.</b></p>
+          <p class="muted" style="font-size:.86rem">Tip uji coba: buka halaman <b>Karyawan</b> di tab lain,
+            proses penimbangan untuk ID <b id="hint-id"></b>, lalu lihat notifikasi muncul di sini.</p>
+        </div>
+
+        <!-- Cabang TIDAK -->
+        <div class="card mt-3 hidden" id="branch-drop" style="background:var(--amber-50);box-shadow:none">
+          <div class="stepper">
+            <div class="s active"><b>Taruh sampah</b>Di lokasi</div>
+            <div class="s"><b>Lapor</b>Drop-off</div>
+            <div class="s"><b>Foto</b>Bukti sampah</div>
+            <div class="s"><b>Verifikasi</b>Oleh admin</div>
+          </div>
+          <div class="field">
+            <label for="drop-cat">Catatan sampah</label>
+            <textarea class="input" id="drop-cat" placeholder="cth. 2 karung plastik PET & 1 ikat koran"></textarea>
+          </div>
+          <div class="field">
+            <label for="drop-foto">Upload foto bukti sampah</label>
+            <input class="input" id="drop-foto" type="file" accept="image/*">
+            <div id="foto-prev" class="mt-2"></div>
+          </div>
+          <button class="btn btn-amber btn-block" onclick="kirimDropoff()">Kirim ke admin untuk verifikasi</button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <script>
+    GG.renderFooter();
+
+    // ---- isi data nasabah ----
+    function refreshMe() { return GG.getUser('nasabah', GG.getSession().id); }
+    function paint() {
+      const u = refreshMe();
+      document.getElementById('me-id').textContent = u.id;
+      document.getElementById('me-nama').textContent = u.nama;
+      document.getElementById('me-saldo').textContent = GG.rupiah(u.saldo);
+      document.getElementById('saldo-amt').textContent = GG.rupiah(u.saldo);
+    }
+    document.getElementById('me-qr').innerHTML = GG.qrSVG(me.id, 150);
+    document.getElementById('setor-qr').innerHTML = GG.qrSVG(me.id, 170);
+    document.getElementById('hint-id').textContent = me.id;
+    paint();
+
+    // riwayat
+    function renderRiwayat() {
+      const u = refreshMe();
+      const box = document.getElementById('riwayat');
+      if (!u.riwayat.length) { box.innerHTML = '<p class="muted">Belum ada transaksi. Yuk setor sampah pertamamu!</p>'; return; }
+      box.innerHTML = u.riwayat.map(r => `
+        <div class="row-item">
+          <div style="font-size:1.4rem">${r.tipe === 'setor' ? '♻️' : '💸'}</div>
+          <div class="grow"><b>${r.ket}</b><div class="muted" style="font-size:.84rem">${GG.tanggal(r.t)}</div></div>
+          <div class="amt ${r.jumlah < 0 ? 'minus' : ''}">${r.jumlah < 0 ? '−' : '+'} ${GG.rupiah(Math.abs(r.jumlah))}</div>
+        </div>`).join('');
+    }
+
+    // katalog
+    (function () {
+      const b = document.getElementById('katalog-body');
+      GG.flatPrices().forEach(p => b.insertAdjacentHTML('beforeend',
+        `<tr><td>${p.nama}</td><td>${p.kategori}</td><td class="price">${GG.rupiah(p.min)}</td><td class="price">${GG.rupiah(p.max)}</td></tr>`));
+    })();
+
+    // ---- navigasi menu ----
+    const panels = ['saldo', 'katalog', 'setor'];
+    function openMenu(name) {
+      panels.forEach(p => document.getElementById('panel-' + p).classList.toggle('hidden', p !== name));
+      if (name === 'saldo') renderRiwayat();
+      document.getElementById('panel-' + name).scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // ---- presensi & setor ----
+    function setorMode(mode) {
+      document.getElementById('branch-qr').classList.toggle('hidden', mode !== 'qr');
+      document.getElementById('branch-drop').classList.toggle('hidden', mode !== 'drop');
+    }
+
+    let fotoData = null;
+    document.getElementById('drop-foto').addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function (ev) {
+        const img = new Image();
+        img.onload = function () {
+          // perkecil agar muat di localStorage
+          const max = 600, scale = Math.min(1, max / img.width);
+          const cv = document.createElement('canvas');
+          cv.width = img.width * scale; cv.height = img.height * scale;
+          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+          fotoData = cv.toDataURL('image/jpeg', 0.7);
+          document.getElementById('foto-prev').innerHTML =
+            `<img src="${fotoData}" style="max-width:220px;border-radius:12px;border:1px solid var(--line)">`;
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    function kirimDropoff() {
+      const catatan = document.getElementById('drop-cat').value.trim();
+      if (!catatan) { GG.toast('Isi catatan sampah dulu ya.'); return; }
+      if (!fotoData) { GG.toast('Unggah foto bukti sampah dulu.'); return; }
+      GG.addDropoff({ nasabahId: me.id, nasabahNama: me.nama, catatan, foto: fotoData });
+      GG.toast('Laporan drop-off terkirim. Menunggu verifikasi admin.', 'amber');
+      document.getElementById('drop-cat').value = '';
+      document.getElementById('foto-prev').innerHTML = '';
+      fotoData = null;
+      setorMode(null);
+    }
+
+    // ---- notifikasi saldo masuk real-time ----
+    let lastSaldo = refreshMe().saldo;
+    function checkSaldo() {
+      const now = refreshMe().saldo;
+      if (now > lastSaldo) {
+        GG.toast('🎉 Saldo masuk +' + GG.rupiah(now - lastSaldo) + '. Total: ' + GG.rupiah(now));
+        paint(); renderRiwayat();
+      } else if (now !== lastSaldo) { paint(); renderRiwayat(); }
+      lastSaldo = now;
+    }
+    setInterval(checkSaldo, 1500);
+    window.addEventListener('storage', checkSaldo); // antar-tab
+
+    window.openMenu = openMenu;
+    window.setorMode = setorMode;
+    window.kirimDropoff = kirimDropoff;
+  </script>
+</body>
+</html>
