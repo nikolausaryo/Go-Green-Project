@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Karyawan — Go-Green</title>
+  <link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+  <script src="assets/js/store.js"></script>
+  <script>
+    const admin = GG.requireRole('karyawan');
+    GG.renderTopbar('dashboard', 'karyawan');
+  </script>
+
+  <section class="section">
+    <div class="container">
+
+      <!-- Header + status IoT timbangan -->
+      <div class="grid grid-2" style="gap:1.4rem;align-items:center">
+        <div>
+          <span class="eyebrow">Dashboard Karyawan</span>
+          <h2 class="mt-2" id="hi"></h2>
+          <p class="muted">Terima setoran sampah nasabah dan verifikasi laporan drop-off.</p>
+        </div>
+        <div class="card">
+          <div class="row-item" style="border:none">
+            <div style="font-size:1.6rem">⚖️</div>
+            <div class="grow"><b>Timbangan IoT</b>
+              <div class="muted" style="font-size:.86rem" id="iot-text">Memeriksa koneksi…</div>
+            </div>
+            <span class="badge green" id="iot-badge"><span class="dot on" id="iot-dot"></span> <span id="iot-status">Terhubung</span></span>
+          </div>
+          <button class="btn btn-ghost btn-sm btn-block mt-1" onclick="toggleIoT()">Simulasikan putus / sambung koneksi</button>
+        </div>
+      </div>
+
+      <!-- Tombol mulai penerimaan -->
+      <div class="card mt-4" id="start-card">
+        <div class="grid grid-2" style="align-items:center">
+          <div>
+            <h3>Penerimaan sampah baru</h3>
+            <p class="muted">Mulai dengan memindai QR Code nasabah. Pastikan timbangan IoT terhubung.</p>
+          </div>
+          <button class="btn btn-primary btn-block" id="btn-start" onclick="scanQR()">+ Penerimaan Sampah Baru</button>
+        </div>
+      </div>
+
+      <!-- Konsol penimbangan (muncul setelah scan) -->
+      <div class="card mt-4 hidden" id="console">
+        <div class="stepper" id="console-steps">
+          <div class="s done"><b>1. Scan QR</b>Nasabah dikenali</div>
+          <div class="s active"><b>2. Timbang</b>Auto dari IoT</div>
+          <div class="s"><b>3. Jenis</b>Hitung harga</div>
+          <div class="s"><b>4. Simpan</b>Saldo & database</div>
+        </div>
+
+        <div class="card" style="background:var(--leaf-50);box-shadow:none">
+          <div class="row-item" style="border:none">
+            <div style="font-size:1.5rem">👤</div>
+            <div class="grow"><b id="cust-nama"></b><div class="muted" style="font-size:.86rem" id="cust-id"></div></div>
+            <span class="badge green">QR terverifikasi</span>
+          </div>
+        </div>
+
+        <div class="grid grid-2 mt-3" style="align-items:start">
+          <!-- Timbangan -->
+          <div>
+            <div class="scale">
+              <div class="lbl">Berat terbaca (IoT)</div>
+              <div><span class="read" id="berat">0.00</span> <span class="unit">kg</span></div>
+            </div>
+            <button class="btn btn-amber btn-block mt-2" id="btn-baca" onclick="bacaTimbangan()">Taruh sampah → Baca timbangan</button>
+            <div class="hint center mt-1">Berat terisi otomatis dari timbangan. Lalu pilih jenis sampahnya.</div>
+          </div>
+
+          <!-- Grid jenis sampah -->
+          <div>
+            <b style="font-size:.9rem">Klik jenis sampah (harga otomatis)</b>
+            <div class="type-grid mt-1" id="type-grid"></div>
+          </div>
+        </div>
+
+        <!-- Daftar item -->
+        <h3 class="mt-3">Rincian setoran</h3>
+        <div id="cart"><p class="muted">Belum ada item. Baca timbangan lalu pilih jenis sampah.</p></div>
+        <div class="row-item" style="font-size:1.05rem"><div class="grow"><b>Total</b></div><div class="amt" id="cart-total">Rp 0</div></div>
+
+        <div class="grid grid-2 mt-2">
+          <button class="btn btn-ghost" onclick="batal()">Batalkan</button>
+          <button class="btn btn-primary" id="btn-konfirmasi" onclick="konfirmasi()" disabled>Lihat konfirmasi data</button>
+        </div>
+      </div>
+
+      <!-- ============ VERIFIKASI DROP-OFF ============ -->
+      <div id="verifikasi" style="scroll-margin-top:90px">
+        <h2 class="mt-4" style="font-size:1.5rem">Verifikasi drop-off
+          <span class="badge amber" id="drop-count">0 menunggu</span>
+        </h2>
+        <p class="muted">Laporan setoran mandiri dari nasabah yang perlu ditimbang & diverifikasi.</p>
+        <div id="drop-list" class="grid" style="gap:1rem"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <script>
+    GG.renderFooter();
+    document.getElementById('hi').textContent = 'Halo, ' + admin.nama;
+
+    /* ---------- STATUS IoT ---------- */
+    let iotConnected = true;
+    function paintIoT() {
+      document.getElementById('iot-status').textContent = iotConnected ? 'Terhubung' : 'Terputus';
+      document.getElementById('iot-text').textContent = iotConnected ? 'Siap membaca berat secara otomatis.' : 'Sambungkan dulu sebelum menimbang.';
+      document.getElementById('iot-dot').className = 'dot ' + (iotConnected ? 'on' : 'off');
+      document.getElementById('iot-badge').className = 'badge ' + (iotConnected ? 'green' : 'red');
+      const baca = document.getElementById('btn-baca');
+      if (baca) baca.disabled = !iotConnected;
+    }
+    function toggleIoT() { iotConnected = !iotConnected; paintIoT(); GG.toast(iotConnected ? 'Timbangan IoT tersambung.' : 'Koneksi timbangan diputus.', iotConnected ? null : 'amber'); }
+    setTimeout(paintIoT, 400);
+
+    /* ---------- STATE PENERIMAAN ---------- */
+    let cust = null;       // nasabah terpilih
+    let cart = [];         // item setoran
+    let beratNow = 0;      // berat terbaca
+    let activeDropoff = null; // jika verifikasi drop-off
+
+    /* ---------- 1. SCAN QR ---------- */
+    function scanQR() {
+      if (!iotConnected) { GG.toast('Hubungkan timbangan IoT dulu.', 'amber'); return; }
+      const nasabah = GG.listNasabah();
+      const rows = nasabah.map(n => `
+        <button class="btn btn-ghost btn-block" style="justify-content:flex-start;margin-bottom:.5rem" onclick="pilihNasabah('${n.id}')">
+          <span style="font-size:1.2rem">📷</span> <b>${n.id}</b> — ${n.nama}
+        </button>`).join('');
+      openModal(`
+        <h3>Scan QR Code Nasabah</h3>
+        <p class="muted">Arahkan kamera ke QR nasabah. Untuk simulasi, pilih dari daftar QR terdaftar:</p>
+        ${rows || '<p class="muted">Belum ada nasabah terdaftar.</p>'}
+      `);
+    }
+    function pilihNasabah(id) {
+      cust = GG.getUser('nasabah', id);
+      activeDropoff = null;
+      closeModal();
+      startConsole();
+      GG.toast('QR dikenali: ' + cust.nama);
+    }
+
+    function startConsole() {
+      cart = []; beratNow = 0;
+      document.getElementById('cust-nama').textContent = cust.nama;
+      document.getElementById('cust-id').textContent = cust.id;
+      document.getElementById('console').classList.remove('hidden');
+      document.getElementById('berat').textContent = '0.00';
+      renderTypes(); renderCart();
+      document.getElementById('console').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    /* ---------- 2. BACA TIMBANGAN (IoT auto-fill) ---------- */
+    function bacaTimbangan() {
+      if (!iotConnected) { GG.toast('Timbangan tidak terhubung.', 'amber'); return; }
+      const target = +(Math.random() * 5.5 + 0.4).toFixed(2); // 0.4 - 5.9 kg
+      const el = document.getElementById('berat');
+      let t = 0; const steps = 18;
+      const iv = setInterval(() => {
+        t++;
+        const v = (target * t / steps) + (Math.random() - .5) * .3; // bergetar
+        el.textContent = Math.max(0, v).toFixed(2);
+        if (t >= steps) { clearInterval(iv); el.textContent = target.toFixed(2); beratNow = target; GG.toast('Berat terbaca: ' + target.toFixed(2) + ' kg'); }
+      }, 45);
+    }
+
+    /* ---------- 3. GRID JENIS SAMPAH ---------- */
+    function renderTypes() {
+      const g = document.getElementById('type-grid');
+      g.innerHTML = GG.flatPrices().map(p => `
+        <button class="type-btn" onclick="tambahItem('${p.kode}')">
+          <b>${p.nama}</b><small>${GG.rupiah(p.harga)}/kg</small>
+        </button>`).join('');
+    }
+    function tambahItem(kode) {
+      if (beratNow <= 0) { GG.toast('Baca timbangan dulu sebelum pilih jenis.', 'amber'); return; }
+      const p = GG.findPrice(kode);
+      const subtotal = Math.round(beratNow * p.harga);
+      cart.push({ kode: p.kode, nama: p.nama, berat: beratNow.toFixed(2), harga: p.harga, subtotal });
+      beratNow = 0; document.getElementById('berat').textContent = '0.00';
+      renderCart();
+      GG.toast(p.nama + ' ditambahkan: ' + GG.rupiah(subtotal));
+      markStep(3);
+    }
+    function hapusItem(i) { cart.splice(i, 1); renderCart(); }
+    function renderCart() {
+      const box = document.getElementById('cart');
+      if (!cart.length) { box.innerHTML = '<p class="muted">Belum ada item. Baca timbangan lalu pilih jenis sampah.</p>'; }
+      else {
+        box.innerHTML = cart.map((it, i) => `
+          <div class="row-item">
+            <div class="grow"><b>${it.nama}</b><div class="muted" style="font-size:.84rem">${it.berat} kg × ${GG.rupiah(it.harga)}</div></div>
+            <div class="amt">${GG.rupiah(it.subtotal)}</div>
+            <button class="btn btn-ghost btn-sm" onclick="hapusItem(${i})">Hapus</button>
+          </div>`).join('');
+      }
+      const total = cart.reduce((s, it) => s + it.subtotal, 0);
+      document.getElementById('cart-total').textContent = GG.rupiah(total);
+      document.getElementById('btn-konfirmasi').disabled = cart.length === 0;
+    }
+    function markStep(n) {
+      const steps = document.querySelectorAll('#console-steps .s');
+      steps.forEach((s, i) => { s.classList.toggle('done', i < n - 1); s.classList.toggle('active', i === n - 1); });
+    }
+
+    /* ---------- 4. KONFIRMASI + SIMPAN ---------- */
+    function konfirmasi() {
+      const total = cart.reduce((s, it) => s + it.subtotal, 0);
+      const rows = cart.map(it => `<div class="row-item"><div class="grow">${it.nama} — ${it.berat} kg</div><div class="amt">${GG.rupiah(it.subtotal)}</div></div>`).join('');
+      openModal(`
+        <h3>Konfirmasi data</h3>
+        <div class="row-item" style="border:none"><div class="grow"><b>${cust.nama}</b><div class="muted">${cust.id}</div></div></div>
+        ${rows}
+        <div class="row-item" style="font-size:1.05rem"><div class="grow"><b>Total saldo masuk</b></div><div class="amt">${GG.rupiah(total)}</div></div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="closeModal()">Periksa lagi</button>
+          <button class="btn btn-primary" onclick="simpan()">Simpan Data & Saldo</button>
+        </div>
+      `, true);
+      markStep(4);
+    }
+    function simpan() {
+      const res = GG.recordSetor(cust.id, cart, activeDropoff ? 'drop-off terverifikasi' : null);
+      if (activeDropoff) markDropoffDone(activeDropoff);
+      closeModal();
+      openModal(`
+        <div class="center">
+          <div class="badge green" style="font-size:.95rem">✓ Data tersimpan di database</div>
+          <h3 class="mt-2">Setoran berhasil disimpan</h3>
+          <p class="muted">Saldo <b>${cust.nama}</b> kini ${GG.rupiah(res.saldo)}.<br>Nasabah menerima notifikasi saldo masuk.</p>
+          <button class="btn btn-primary btn-block mt-2" onclick="selesai()">Selesai</button>
+        </div>`);
+    }
+    function markDropoffDone(id) {
+      const db = GG.load();
+      const d = db.dropoffs.find(x => x.id === id);
+      if (d) { d.status = 'terverifikasi'; GG.save(db); }
+    }
+    function selesai() { closeModal(); resetConsole(); renderDropoffs(); }
+    function batal() { resetConsole(); }
+    function resetConsole() {
+      cust = null; cart = []; beratNow = 0; activeDropoff = null;
+      document.getElementById('console').classList.add('hidden');
+      document.getElementById('start-card').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    /* ---------- VERIFIKASI DROP-OFF ---------- */
+    function renderDropoffs() {
+      const pend = GG.listDropoffs('menunggu');
+      document.getElementById('drop-count').textContent = pend.length + ' menunggu';
+      const list = document.getElementById('drop-list');
+      if (!pend.length) { list.innerHTML = '<div class="card muted">Tidak ada laporan drop-off yang menunggu.</div>'; return; }
+      list.innerHTML = pend.map(d => `
+        <div class="card grid grid-2" style="align-items:center;gap:1.2rem">
+          <div>
+            <span class="badge amber">Menunggu verifikasi</span>
+            <h3 class="mt-1" style="font-size:1.05rem">${d.nasabahNama} <span class="muted" style="font-weight:400">· ${d.nasabahId}</span></h3>
+            <p class="muted" style="font-size:.9rem">${d.catatan}</p>
+            <div class="muted" style="font-size:.8rem">${GG.tanggal(d.t)} · ${d.id}</div>
+            <div class="mt-2" style="display:flex;gap:.5rem">
+              <button class="btn btn-primary btn-sm" onclick="verifikasiDrop('${d.id}')">Verifikasi & timbang</button>
+              <button class="btn btn-ghost btn-sm" onclick="tolakDrop('${d.id}')">Tolak</button>
+            </div>
+          </div>
+          <img src="${d.foto}" alt="bukti sampah" style="border-radius:12px;border:1px solid var(--line);max-height:160px;object-fit:cover;width:100%">
+        </div>`).join('');
+    }
+    function verifikasiDrop(id) {
+      const d = GG.listDropoffs().find(x => x.id === id);
+      cust = GG.getUser('nasabah', d.nasabahId);
+      activeDropoff = id;
+      startConsole();
+      GG.toast('Menimbang drop-off ' + d.id + ' milik ' + cust.nama);
+    }
+    function tolakDrop(id) { GG.rejectDropoff(id); renderDropoffs(); GG.toast('Laporan ditolak.', 'amber'); }
+    renderDropoffs();
+
+    /* ---------- MODAL ---------- */
+    function openModal(html, noClose) {
+      closeModal();
+      const bg = document.createElement('div');
+      bg.className = 'modal-bg'; bg.id = 'modal-bg';
+      bg.innerHTML = `<div class="modal">${html}</div>`;
+      if (!noClose) bg.addEventListener('click', e => { if (e.target === bg) closeModal(); });
+      document.body.appendChild(bg);
+    }
+    function closeModal() { const m = document.getElementById('modal-bg'); if (m) m.remove(); }
+
+    // ekspor ke global utk onclick
+    Object.assign(window, { scanQR, pilihNasabah, bacaTimbangan, tambahItem, hapusItem,
+      konfirmasi, simpan, selesai, batal, toggleIoT, verifikasiDrop, tolakDrop, closeModal });
+  </script>
+</body>
+</html>
